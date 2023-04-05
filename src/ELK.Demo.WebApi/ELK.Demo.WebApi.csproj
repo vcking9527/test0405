@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Spa的資料夾目錄 -->
+    <SpaRoot>..\client-app\</SpaRoot>
+    <!-- 設定當前端的dev server啟動後，將網址跳轉到前端專案網址 -->
+    <SpaProxyServerUrl>http://localhost:7000</SpaProxyServerUrl>
+    <!-- 設定執行前端專案指令 -->
+    <SpaProxyLaunchCommand>npm run serve</SpaProxyLaunchCommand>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>          
+  </PropertyGroup>
+
+  <!-- 不可以將spa專案也包含在dotnet專案內 -->
+  <ItemGroup>
+      <Content Remove="$(SpaRoot)**" />
+      <None Remove="$(SpaRoot)**" />
+      <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NEST" Version="7.17.5" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="6.0.7" />
+    <PackageReference Include="NSwag.MSBuild" Version="13.16.1">
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        <PrivateAssets>all</PrivateAssets>
+    </PackageReference>    
+  </ItemGroup>
+
+    <!-- create openapi cli -->
+    <Target Name="OpenApiCliBuild" AfterTargets="PostBuildEvent" Condition="'$(Configuration)' == 'Debug'">
+        <!-- create static file openapi doc -->
+        <Exec Command="dotnet tool restore" />
+        <Exec Command="dotnet new tool-manifest --force" />
+        <Exec Command="dotnet tool install --local --version 6.2.3 Swashbuckle.AspNetCore.Cli" />
+        <Exec Command="dotnet swagger tofile --output swagger.json $(OutputPath)\$(AssemblyName).dll v1" />
+
+        <!-- create openapi codegenerator -->
+        <Exec WorkingDirectory="$(ProjectDir)" EnvironmentVariables="ASPNETCORE_ENVIRONMENT=Development" Command="$(NSwagExe_Net60) openapi2tsclient /input:swagger.json /output:../client-app/src/apis/apiModels.ts /generateClientClasses:true /template:Axios" />
+    </Target>
+
+    <Target Name="DebugEnsureNodeEnv" BeforeTargets="Build" Condition=" '$(Configuration)' == 'Debug' And !Exists('$(SpaRoot)node_modules')">
+        <!-- Ensure Node.js is installed -->
+        <Exec Command="node --version" ContinueOnError="true">
+            <Output TaskParameter="ExitCode" PropertyName="ErrorCode" />
+        </Exec>
+        <Error Condition="'$(ErrorCode)' != '0'" Text="Node.js is required to build and run this project. To continue, please install Node.js from https://nodejs.org/, and then restart your command prompt or IDE." />
+        <Message Importance="high" Text="Restoring dependencies using 'npm'. This may take several minutes..." />
+        <Exec WorkingDirectory="$(SpaRoot)" Command="npm install" />
+    </Target>
+
+    <Target Name="PublishRunWebpack" AfterTargets="ComputeFilesToPublish">
+        <!-- As part of publishing, ensure the JS resources are freshly built in production mode -->
+        <Exec WorkingDirectory="$(SpaRoot)" Command="npm install" />
+        <Exec WorkingDirectory="$(SpaRoot)" Command="npm version $(Version) --allow-same-version --no-git-tag-version" />
+        <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+
+        <!-- Include the newly-built files in the publish output -->
+        <ItemGroup>
+            <DistFiles Include="$(SpaRoot)dist\**; $(SpaRoot)dist-server\**" />
+            <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+                <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
+                <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+                <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+            </ResolvedFileToPublish>
+        </ItemGroup>
+    </Target>
+
+
+</Project>
